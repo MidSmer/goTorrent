@@ -21,6 +21,7 @@ logs/server.log
 config.toml.backup
 config.1.toml
 config.toml.old
+config.toml.bk
 /public/static/js/kickwebsocket.js.backup
 /public/static/js/kickwebsocket-generated.js
 clientAuth.txt
