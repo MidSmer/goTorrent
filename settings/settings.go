@@ -11,6 +11,7 @@ import (
 
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/torrent"
+	GoTorrent "github.com/MidSmer/goTorrent/torrent"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -38,7 +39,7 @@ type FullClientSettings struct {
 	LoggingLevel       logrus.Level
 	LoggingOutput      string
 	Version            int
-	TorrentConfig      torrent.ClientConfig `json:"-"`
+	TorrentConfig      *GoTorrent.ClientConfig `json:"-"`
 	TFileUploadFolder  string
 	SeedRatioStop      float64
 	DefaultMoveFolder  string
@@ -52,10 +53,10 @@ func defaultConfig() FullClientSettings {
 	var Config FullClientSettings
 	Config.ID = 4 //Unique ID for StormDB
 	Config.Version = 1.0
-	Config.LoggingLevel = logrus.WarnLevel     //Warn level
-	Config.TorrentConfig.DataDir = "downloads" //the absolute or relative path of the default download directory for torrents
+	Config.LoggingLevel = logrus.WarnLevel        //Warn level
+	Config.TorrentConfig.Cc.DataDir = "downloads" //the absolute or relative path of the default download directory for torrents
 	Config.TFileUploadFolder = "uploadedTorrents"
-	Config.TorrentConfig.Seed = true
+	Config.TorrentConfig.Cc.Seed = true
 	Config.HTTPAddr = ":8000"
 	Config.SeedRatioStop = 1.50
 
@@ -267,7 +268,10 @@ func FullClientSettingsNew() FullClientSettings {
 			PushBulletToken:     pushBulletToken,
 		},
 		TFileUploadFolder:  "uploadedTorrents",
-		TorrentConfig:      *tConfig,
+		TorrentConfig:      &GoTorrent.ClientConfig{
+			Cc:           tConfig,
+			MaxActiveNum: maxActiveTorrents,
+		},
 		DefaultMoveFolder:  defaultMoveFolderAbs,
 		TorrentWatchFolder: torrentWatchFolderAbs,
 		MaxActiveTorrents:  maxActiveTorrents,

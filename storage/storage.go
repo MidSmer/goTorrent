@@ -1,12 +1,10 @@
 package storage
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 
+	Settings "github.com/MidSmer/goTorrent/settings"
 	"github.com/asdine/storm"
-	Settings "github.com/deranjer/goTorrent/settings"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 )
@@ -46,8 +44,8 @@ type TorrentHistoryList struct {
 
 //RSSFeedStore stores all of our RSS feeds in a slice of gofeed.Feed
 type RSSFeedStore struct {
-	ID       int             `storm:"id,unique"` //storm requires unique ID (will be 1) to save although there will only be one of these
-	RSSFeeds []SingleRSSFeed //slice of string containing URL's in string form for gofeed to parse
+	ID       int `storm:"id,unique"` //storm requires unique ID (will be 1) to save although there will only be one of these
+	RSSFeeds []SingleRSSFeed         //slice of string containing URL's in string form for gofeed to parse
 }
 
 //SingleRSSFeed stores an RSS feed with a list of all the torrents in the feed
@@ -92,6 +90,14 @@ type TorrentLocal struct {
 	TorrentSize         int64  //If we cancel a file change the download size since we won't be downloading that file
 	UploadRatio         string
 	TorrentFilePriority []TorrentFilePriority //Slice of all the files the torrent contains and the priority of each file
+	IsPause             bool
+	IsGetMetadata       bool
+	IsDownloading       bool
+}
+
+func NewStorage(path string) (*storm.DB, error) {
+	db, err := storm.Open(filepath.Join(path, "storage.db"))
+	return db, err
 }
 
 //SaveConfig saves the config to the database to compare for changes to settings.toml on restart
@@ -145,51 +151,6 @@ func FetchAllStoredTorrents(torrentStorage *storm.DB) (torrentLocalArray []*Torr
 	return torrentLocalArray //all done, return the entire Array to add to the torrent client
 }
 
-//AddTorrentLocalStorage is called when adding a new torrent via any method, requires the boltdb pointer and the torrentlocal struct
-func AddTorrentLocalStorage(torrentStorage *storm.DB, local TorrentLocal) {
-	Logger.WithFields(logrus.Fields{"Storage Path": local.StoragePath, "Torrent": local.TorrentName, "File(if file)": local.TorrentFileName}).Info("Adding new Torrent to database")
-	fmt.Println("ENTIRE TORRENT", local)
-	err := torrentStorage.Save(&local)
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"database": torrentStorage, "error": err}).Error("Error adding new Torrent to database!")
-	}
-}
-
-//DelTorrentLocalStorage is called to delete a torrent when we fail (for whatever reason to load the information for it).  Deleted by HASH matching.
-func DelTorrentLocalStorage(torrentStorage *storm.DB, selectedHash string) {
-	singleTorrentInfo := TorrentLocal{}
-	err := torrentStorage.One("Hash", selectedHash, &singleTorrentInfo) //finding the torrent by the hash passed in and storing it in a struct
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"selectedHash": selectedHash, "error": err}).Error("Error deleting torrent with hash!")
-	}
-	err = torrentStorage.DeleteStruct(&singleTorrentInfo) //deleting that struct from the database
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"singleTorrent": singleTorrentInfo, "error": err}).Error("Error deleting torrent struct!")
-	}
-}
-
-//DelTorrentLocalStorageAndFiles deletes the torrent from the database and also attempts to delete the torrent files from the disk as well.
-func DelTorrentLocalStorageAndFiles(torrentStorage *storm.DB, selectedHash string, fileDownloadPath string) {
-	singleTorrentInfo := TorrentLocal{}
-	err := torrentStorage.One("Hash", selectedHash, &singleTorrentInfo) //finding the torrent by the hash passed in and storing it in a struct
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"selectedHash": selectedHash, "error": err}).Error("Error deleting torrent with hash!")
-	}
-	singleTorrentPath := filepath.Join(fileDownloadPath, singleTorrentInfo.TorrentName)
-	err = os.RemoveAll(singleTorrentPath)
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"filepath": singleTorrentPath, "error": err}).Error("Error deleting torrent data!")
-	} else {
-		Logger.WithFields(logrus.Fields{"filepath": singleTorrentPath}).Info("Deleting Torrent Data..")
-	}
-	err = torrentStorage.DeleteStruct(&singleTorrentInfo) //deleting that struct from the database
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"singleTorrent": singleTorrentInfo, "error": err}).Error("Error deleting torrent struct!")
-	} else {
-		Logger.WithFields(logrus.Fields{"singleTorrent": singleTorrentInfo.TorrentName}).Info("Deleted Torrent Struct")
-	}
-}
-
 //UpdateStorageTick updates the values in boltdb that should update on every tick (like uploadratio or uploadedbytes, not downloaded since we should have the actual file)
 func UpdateStorageTick(torrentStorage *storm.DB, torrentLocal TorrentLocal) {
 	err := torrentStorage.Update(&torrentLocal)
@@ -198,33 +159,6 @@ func UpdateStorageTick(torrentStorage *storm.DB, torrentLocal TorrentLocal) {
 	} else {
 		Logger.WithFields(logrus.Fields{"UpdateContents": torrentLocal, "error": err}).Debug("Performed Update to database!")
 	}
-}
-
-//FetchTorrentFromStorage grabs the localtorrent info from the bolt database for usage found by torrenthash
-func FetchTorrentFromStorage(torrentStorage *storm.DB, selectedHash string) TorrentLocal {
-	singleTorrentInfo := TorrentLocal{}
-	err := torrentStorage.One("Hash", selectedHash, &singleTorrentInfo)
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"selectedHash": selectedHash, "error": err}).Error("Error selecting torrent with hash!")
-	}
-
-	return singleTorrentInfo
-}
-
-//FetchTorrentsByLabel fetches a list of torrents that have a specific label
-func FetchTorrentsByLabel(torrentStorage *storm.DB, label string) []TorrentLocal {
-	allTorrents := []*TorrentLocal{}
-	torrentsByLabel := []TorrentLocal{}
-	err := torrentStorage.All(&allTorrents)
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"database": torrentStorage, "error": err}).Error("Unable to read Database into torrentLocalArray!")
-	}
-	for _, torrent := range allTorrents {
-		if torrent.Label == label {
-			torrentsByLabel = append(torrentsByLabel, *torrent)
-		}
-	}
-	return torrentsByLabel
 }
 
 //FetchHashHistory fetches the infohash of all torrents added into the client.  The cron job checks this so as not to add torrents from RSS that were already added before
@@ -244,16 +178,6 @@ func FetchHashHistory(db *storm.DB) TorrentHistoryList {
 	return torrentHistory
 }
 
-//StoreHashHistory adds the infohash of all torrents added into the client.  The cron job checks this so as not to add torrents from RSS that were already added before
-func StoreHashHistory(db *storm.DB, torrentHash string) {
-	torrentHistory := FetchHashHistory(db)
-	torrentHistory.HashList = append(torrentHistory.HashList, torrentHash)
-	err := db.Update(torrentHistory)
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"HashList": torrentHistory}).Error("Unable to update torrent history database with torrent hash!")
-	}
-}
-
 //FetchJWTTokens fetches the stored client authentication tokens
 func FetchJWTTokens(db *storm.DB) IssuedTokensList {
 	tokens := IssuedTokensList{}
@@ -262,69 +186,4 @@ func FetchJWTTokens(db *storm.DB) IssuedTokensList {
 		Logger.WithFields(logrus.Fields{"Tokens": tokens, "error": err}).Error("Unable to fetch Token database... should always be one token in database")
 	}
 	return tokens
-}
-
-//UpdateJWTTokens updates the database with new tokens as they are added
-func UpdateJWTTokens(db *storm.DB, tokens IssuedTokensList) {
-	err := db.Update(&tokens)
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"Tokens": tokens, "error": err}).Error("Unable to update Token database")
-	}
-
-}
-
-//FetchRSSFeeds fetches the RSS feed from db, which was setup when initializing database on first startup
-func FetchRSSFeeds(db *storm.DB) RSSFeedStore {
-	RSSFeed := RSSFeedStore{}
-	err := db.One("ID", 1, &RSSFeed) //The ID of 1 should be unique since we will only have one entry
-	if err != nil {                  //If we fail to find it in the DB, create it, will happen at first run
-		Logger.WithFields(logrus.Fields{"RSSFeedStore": RSSFeed, "error": err}).Error("Failure retrieving RSS feeds, creating bucket for RSS feeds, expected behaviour if first run for RSS")
-		RSSFeed := RSSFeedStore{}
-		RSSFeed.ID = 1
-		err = db.Save(&RSSFeed)
-		if err != nil {
-			Logger.WithFields(logrus.Fields{"RSSFeed": RSSFeed, "error": err}).Error("Error saving RSS feed to database!")
-		}
-		return RSSFeed
-	}
-	return RSSFeed
-}
-
-//FetchSpecificRSSFeed pulls one feed from the database to send to the client
-func FetchSpecificRSSFeed(db *storm.DB, RSSFeedURL string) SingleRSSFeed {
-	allRSSFeeds := FetchRSSFeeds(db)
-	singleRSSFeedRet := SingleRSSFeed{}
-	for _, singleRSSFeed := range allRSSFeeds.RSSFeeds {
-		if singleRSSFeed.URL == RSSFeedURL {
-			singleRSSFeedRet.Name = singleRSSFeed.Name
-			singleRSSFeedRet.URL = singleRSSFeed.URL
-			singleRSSFeedRet.Torrents = singleRSSFeed.Torrents
-		}
-	}
-	Logger.WithFields(logrus.Fields{"singleRSSFeed": singleRSSFeedRet}).Info("Returning single RSS feed")
-	return singleRSSFeedRet
-}
-
-//UpdateRSSFeeds updates the RSS feeds everytime they are changed
-func UpdateRSSFeeds(db *storm.DB, RSSFeed RSSFeedStore) {
-	err := db.Update(&RSSFeed)
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"RSSFeed": RSSFeed}).Error("Unable to update database with rss feed!")
-	}
-}
-
-//DeleteRSSFeed grabs old database then recreates it without the deleted RSS Feed
-func DeleteRSSFeed(db *storm.DB, RSSFeedURL string) {
-	RSSFeedStoreOld := FetchRSSFeeds(db)                    //Fetching current store to update
-	newRSSFeedStore := RSSFeedStore{ID: RSSFeedStoreOld.ID} //creating new store
-	for _, RSSFeed := range RSSFeedStoreOld.RSSFeeds {      //recreating entire store and excluding that one RSS feed we don't want
-		if RSSFeed.URL != RSSFeedURL {
-			Logger.WithFields(logrus.Fields{"RSSFeedURL": RSSFeedURL}).Debug("Deleting RSS Feed...")
-			newRSSFeedStore.RSSFeeds = append(newRSSFeedStore.RSSFeeds, RSSFeed)
-		}
-	}
-	err := db.Update(&newRSSFeedStore)
-	if err != nil {
-		Logger.WithFields(logrus.Fields{"RSSFeedURL": RSSFeedURL, "error": err}).Error("Error deleting RSS feed from database")
-	}
 }
