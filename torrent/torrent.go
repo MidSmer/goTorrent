@@ -15,3 +15,31 @@ type Torrent struct {
 	isActive	 		bool
 	isGetMatainfo	    bool
 }
+
+func (t *Torrent) CalculateTorrentStatus() string {
+	if t.isActive && t.isGetMatainfo {
+		return "GetMatainfo"
+	}
+
+	if t.isPaused {
+		return "Stopped"
+	}
+
+	if t.to.Info() == nil {
+		return "Unknown"
+	}
+
+	if t.isActive && !t.isGetMatainfo && t.to.Stats().ActivePeers > 0 && t.to.BytesMissing() > 0 {
+		return "Downloading"
+	}
+
+	if t.isActive && t.to.Seeding() && t.to.Stats().ActivePeers > 0 && t.to.BytesMissing() == 0 {
+		return "Seeding"
+	}
+
+	if t.to.Stats().ActivePeers == 0 && t.to.BytesMissing() == 0 {
+		return "Completed"
+	}
+
+	return "Unknown"
+}

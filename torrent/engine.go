@@ -22,7 +22,7 @@ func CreateServerPushMessage(message ServerPushMessage, conn *websocket.Conn) {
 
 //CreateRunningTorrentArray creates the entire torrent list to pass to client
 func CreateRunningTorrentArray(tclient *Client) (RunningTorrentArray []ClientDB) {
-	for _, singleTorrent := range tclient.TorrentStateFilter(Downloading) {
+	for _, singleTorrent := range tclient.Torrents() {
 		fullClientDB := new(ClientDB)
 		//Handling deleted torrents here
 		var TempHash metainfo.Hash
@@ -33,11 +33,16 @@ func CreateRunningTorrentArray(tclient *Client) (RunningTorrentArray []ClientDB)
 		fullClientDB.StoragePath = ""
 
 		downloadedSizeHumanized := HumanizeBytes(float32(singleTorrent.to.BytesCompleted())) //convert size to GB if needed
-		totalSizeHumanized := HumanizeBytes(float32(singleTorrent.to.Length()))
+
+		totalSizeHumanized := ""
+		PercentDone := ""
+		if singleTorrent.to.Info() != nil {
+			totalSizeHumanized = HumanizeBytes(float32(singleTorrent.to.Length()))
+			PercentDone = fmt.Sprintf("%.2f", float32(singleTorrent.to.BytesCompleted())/float32(singleTorrent.to.Length()))
+		}
 
 		fullClientDB.DownloadedSize = downloadedSizeHumanized
 		fullClientDB.Size = totalSizeHumanized
-		PercentDone := fmt.Sprintf("%.2f", float32(singleTorrent.to.BytesCompleted())/float32(singleTorrent.to.Length()))
 		fullClientDB.TorrentHash = TempHash
 		fullClientDB.PercentDone = PercentDone
 		fullClientDB.DataBytesRead = 0    //used for calculations not passed to client calculating up/down speed
@@ -48,6 +53,8 @@ func CreateRunningTorrentArray(tclient *Client) (RunningTorrentArray []ClientDB)
 		fullClientDB.DateAdded = ""
 		fullClientDB.TorrentLabel = TempHash.String()
 		fullClientDB.BytesCompleted = singleTorrent.to.BytesCompleted()
+
+		fullClientDB.Status = singleTorrent.CalculateTorrentStatus()
 
 		fullClientDB.TotalUploadedSize = ""
 		fullClientDB.UploadRatio = ""
