@@ -112,7 +112,7 @@ func calculateRateLimiters(uploadRate, downloadRate string) (*rate.Limiter, *rat
 
 //FullClientSettingsNew creates a new set of setting from config.toml
 func FullClientSettingsNew() FullClientSettings {
-	viper.SetConfigName("config")
+	viper.SetConfigName("defaultConfig")
 	viper.AddConfigPath("./")
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -120,6 +120,10 @@ func FullClientSettingsNew() FullClientSettings {
 		FullClientSettings := defaultConfig()
 		return FullClientSettings
 	}
+
+	viper.SetConfigName("config")
+	viper.AddConfigPath("./")
+	viper.MergeInConfig()
 
 	var httpAddr string
 	var baseURL string
@@ -211,6 +215,7 @@ func FullClientSettingsNew() FullClientSettings {
 	disableTCP := viper.GetBool("torrentClientConfig.DisableTCP")
 	disableIPv6 := viper.GetBool("torrentClientConfig.DisableIPv6")
 	debug := viper.GetBool("torrentClientConfig.Debug")
+	proxyURL := viper.GetString("torrentClientConfig.ProxyURL")
 
 	//dhtServerConfig := dht.StartingNodesGetter()
 
@@ -246,6 +251,7 @@ func FullClientSettingsNew() FullClientSettings {
 	tConfig.DisableTCP = disableTCP
 	tConfig.DisableIPv6 = disableIPv6
 	tConfig.Debug = debug
+	tConfig.ProxyURL = proxyURL
 	tConfig.EncryptionPolicy = encryptionPolicy
 	if listenAddr != "" {
 		tConfig.SetListenAddr(listenAddr) //Setting the IP address to listen on
