@@ -138,6 +138,7 @@ func main() {
 	}
 	defer db.Close() //defering closing the database until the program closes
 
+	Config.TorrentConfig.DefaultStorage = db
 	tclient, err := torrent.NewClient(Config.TorrentConfig) //pulling out the torrent specific config to use
 	if err != nil {
 		Logger.WithFields(logrus.Fields{"error": err}).Fatalf("Error creating torrent client: %s")

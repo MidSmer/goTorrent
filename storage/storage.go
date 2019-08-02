@@ -76,23 +76,14 @@ type TorrentLocal struct {
 	DateAdded           string
 	StoragePath         string //The absolute value of the path where the torrent will be moved when completed
 	TempStoragePath     string //The absolute path of where the torrent is temporarily stored as it is downloaded
-	TorrentMoved        bool   //If completed has the torrent been moved to the end location
 	TorrentName         string
-	TorrentStatus       string //"Stopped", "Running", "ForceStart"
-	TorrentUploadLimit  bool   //if true this torrent will bypass the upload storage limit (effectively unlimited)
-	MaxConnections      int    //Max connections that the torrent can have to it at one time
 	TorrentType         string //magnet or .torrent file
 	TorrentFileName     string //Should be just the name of the torrent
 	TorrentFile         []byte //If torrent was from .torrent file, store the entire file for re-adding on restart
 	Label               string //User enterable label to sort torrents by
-	UploadedBytes       int64  //Total amount the client has uploaded on this torrent
-	DownloadedBytes     int64  //Total amount the client has downloaded on this torrent
-	TorrentSize         int64  //If we cancel a file change the download size since we won't be downloading that file
-	UploadRatio         string
-	TorrentFilePriority []TorrentFilePriority //Slice of all the files the torrent contains and the priority of each file
 	IsPause             bool
 	IsGetMetadata       bool
-	IsDownloading       bool
+	IsActive       bool
 }
 
 func NewStorage(path string) (*storm.DB, error) {

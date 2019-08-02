@@ -1,9 +1,12 @@
 package torrent
 
 import (
+	"fmt"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/asdine/storm"
 	"sync"
+	"time"
 )
 
 type Client struct {
@@ -11,6 +14,7 @@ type Client struct {
 
 	_mu sync.RWMutex
 
+	storage      *storm.DB
 	torrents     map[torrent.InfoHash]*Torrent
 	maxActiveNum int
 }
@@ -28,6 +32,10 @@ func NewClient(cfg *ClientConfig) (cl *Client, err error) {
 		torrents:     make(map[metainfo.Hash]*Torrent),
 		maxActiveNum: cfg.MaxActiveNum,
 	}
+
+	cl.storage = cfg.DefaultStorage
+
+	cl.Recovery()
 
 	return
 }
@@ -47,37 +55,37 @@ func (cl *Client) torrentsAsSlice() (ret []*Torrent) {
 }
 
 func (cl *Client) TorrentStateFilter(state downloadState) []*Torrent {
-	torrents := []*Torrent{}
+	var torrents []*Torrent
 
-	for _, torrent := range cl.Torrents() {
+	for _, t := range cl.Torrents() {
 		switch state {
 		case Downloading:
-			if torrent.isActive && !torrent.isGetMatainfo && torrent.to.Stats().ActivePeers > 0 && torrent.to.BytesMissing() > 0 {
-				torrents = append(torrents, torrent)
+			if t.isActive && !t.isGetMatainfo && t.to.Stats().ActivePeers > 0 && t.to.BytesMissing() > 0 {
+				torrents = append(torrents, t)
 			}
 		case Seeding:
-			if torrent.isActive && torrent.to.Seeding() && torrent.to.Stats().ActivePeers > 0 && torrent.to.BytesMissing() == 0 {
-				torrents = append(torrents, torrent)
+			if t.isActive && t.to.Seeding() && t.to.Stats().ActivePeers > 0 && t.to.BytesMissing() == 0 {
+				torrents = append(torrents, t)
 			}
 		case Completed:
-			if torrent.to.Stats().ActivePeers == 0 && torrent.to.BytesMissing() == 0 {
-				torrents = append(torrents, torrent)
+			if t.to.Stats().ActivePeers == 0 && t.to.BytesMissing() == 0 {
+				torrents = append(torrents, t)
 			}
 		case Paused:
-			if torrent.isPaused {
-				torrents = append(torrents, torrent)
+			if t.isPaused {
+				torrents = append(torrents, t)
 			}
 		case Active:
-			if torrent.isActive {
-				torrents = append(torrents, torrent)
+			if t.isActive {
+				torrents = append(torrents, t)
 			}
 		case Inactive:
-			if torrent.isActive && torrent.to.Stats().ActivePeers == 0 && torrent.to.BytesMissing() > 0 {
-				torrents = append(torrents, torrent)
+			if t.isActive && t.to.Stats().ActivePeers == 0 && t.to.BytesMissing() > 0 {
+				torrents = append(torrents, t)
 			}
 		case Errored:
-			if torrent.isErrored {
-				torrents = append(torrents, torrent)
+			if t.isErrored {
+				torrents = append(torrents, t)
 			}
 		}
 	}
@@ -101,6 +109,32 @@ func (cl *Client) AddTorrentSpec(spec *torrent.TorrentSpec) (t *Torrent, new boo
 		isActive:      true,
 		isPaused:      false,
 		isGetMatainfo: true,
+	}
+
+	var storage TorrentStorage
+	e := cl.storage.One("Hash", t.to.InfoHash().String(), &storage)
+	if e != nil {
+		if e != storm.ErrNotFound {
+			fmt.Println("Err read storage.db")
+		}
+	}
+
+	if storage.Hash == "" {
+		storage = TorrentStorage{
+			Hash:          T.InfoHash().String(),
+			DateAdded:     time.Now().String(),
+			TorrentName:   spec.DisplayName,
+			Trackers:      spec.Trackers,
+			InfoHash:      T.InfoHash(),
+			IsActive:      true,
+			IsPaused:      false,
+			IsGetMatainfo: true,
+		}
+
+		e := cl.storage.Save(&storage)
+		if e != nil {
+			fmt.Println("Err write storage.db")
+		}
 	}
 
 	cl.torrents[T.InfoHash()] = t
@@ -129,6 +163,20 @@ func (cl *Client) StartDownload(t *Torrent) {
 		if err != nil {
 			return
 		}
+
+		storage := TorrentStorage{}
+		e := cl.storage.One("Hash", t.to.InfoHash().String(), &storage)
+		if e != nil {
+			fmt.Println("Err read storage.db")
+		}
+
+		storage.IsGetMatainfo = false
+		storage.InfoBytes = t.to.Metainfo().InfoBytes
+
+		e = cl.storage.Update(&storage)
+		if e != nil {
+			fmt.Println("Err write storage.db")
+		}
 	}()
 }
 
@@ -137,6 +185,28 @@ func (cl *Client) SetConns(t *Torrent, connsCount int) (old int, err error) {
 	old = t.to.SetMaxEstablishedConns(connsCount)
 
 	return
+}
+
+func (cl *Client) Recovery() {
+	var storage []TorrentStorage
+	e := cl.storage.All(&storage)
+	if e != nil {
+		fmt.Println("Err read storage.db")
+	}
+
+	for _, item := range storage {
+		spec := &torrent.TorrentSpec{
+			Trackers:    item.Trackers,
+			DisplayName: item.TorrentName,
+			InfoHash:    item.InfoHash,
+		}
+
+		if len(item.InfoBytes) > 0 {
+			spec.InfoBytes = item.InfoBytes
+		}
+
+		_, _, _ = cl.AddTorrentSpec(spec)
+	}
 }
 
 func (cl *Client) rLock() {
