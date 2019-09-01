@@ -9,9 +9,9 @@ import (
 
 	"golang.org/x/time/rate"
 
+	GoTorrent "github.com/MidSmer/goTorrent/torrent"
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/torrent"
-	GoTorrent "github.com/MidSmer/goTorrent/torrent"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -35,17 +35,15 @@ type ClientConnectSettings struct {
 
 //FullClientSettings contains all of the settings for our entire application
 type FullClientSettings struct {
-	ID                 int `storm:"id,unique"`
-	LoggingLevel       logrus.Level
-	LoggingOutput      string
-	Version            int
-	TorrentConfig      *GoTorrent.ClientConfig `json:"-"`
-	TFileUploadFolder  string
-	SeedRatioStop      float64
-	DefaultMoveFolder  string
-	TorrentWatchFolder string
+	ID            int `storm:"id,unique"`
+	LoggingLevel  logrus.Level
+	LoggingOutput string
+	Version       int
+	TorrentConfig *GoTorrent.ClientConfig `json:"-"`
+	SeedRatioStop float64
+	DownloadDir   string
+	Debug         bool
 	ClientConnectSettings
-	MaxActiveTorrents int
 }
 
 //default is called if there is a parsing error
@@ -55,7 +53,6 @@ func defaultConfig() FullClientSettings {
 	Config.Version = 1.0
 	Config.LoggingLevel = logrus.WarnLevel        //Warn level
 	Config.TorrentConfig.Cc.DataDir = "downloads" //the absolute or relative path of the default download directory for torrents
-	Config.TFileUploadFolder = "uploadedTorrents"
 	Config.TorrentConfig.Cc.Seed = true
 	Config.HTTPAddr = ":8000"
 	Config.SeedRatioStop = 1.50
@@ -161,9 +158,9 @@ func FullClientSettingsNew() FullClientSettings {
 		baseURL = viper.GetString("reverseProxy.BaseURL")
 		fmt.Println("WebsocketClientPort", viper.GetString("serverConfig.ServerPort"))
 	}
-	socksProxySet := viper.GetBool("socksProxy.ProxyEnabled")
+	socksProxySet := viper.GetBool("socksProxy.SocksProxyEnabled")
 	if socksProxySet {
-		socksProxyURLBase = viper.GetString("reverseProxy.BaseURL")
+		socksProxyURLBase = viper.GetString("socksProxy.SocksProxyURL")
 	}
 	//Client Authentication
 	clientAuthEnabled := viper.GetBool("goTorrentWebUI.WebUIAuth")
@@ -178,16 +175,6 @@ func FullClientSettingsNew() FullClientSettings {
 	}
 	//General Settings
 	seedRatioStop := viper.GetFloat64("serverConfig.SeedRatioStop")
-	defaultMoveFolder := filepath.ToSlash(viper.GetString("serverConfig.DefaultMoveFolder")) //Converting the string literal into a filepath
-	defaultMoveFolderAbs, err := filepath.Abs(defaultMoveFolder)
-	if err != nil {
-		fmt.Println("Failed creating absolute path for defaultMoveFolder", err)
-	}
-	torrentWatchFolder := filepath.ToSlash(viper.GetString("serverConfig.TorrentWatchFolder"))
-	torrentWatchFolderAbs, err := filepath.Abs(torrentWatchFolder)
-	if err != nil {
-		fmt.Println("Failed creating absolute path for torrentWatchFolderAbs", err)
-	}
 	//Notifications
 	pushBulletToken := viper.GetString("notifications.PushBulletToken")
 
@@ -198,8 +185,8 @@ func FullClientSettingsNew() FullClientSettings {
 	downloadRate := viper.GetString("serverConfig.DownloadRateLimit")
 	downloadRateLimiter, uploadRateLimiter := calculateRateLimiters(uploadRate, downloadRate)
 	//Internals
-	dataDir := filepath.ToSlash(viper.GetString("torrentClientConfig.DownloadDir")) //Converting the string literal into a filepath
-	dataDirAbs, err := filepath.Abs(dataDir)                                        //Converting to an absolute file path
+	dataDir := filepath.ToSlash(viper.GetString("serverConfig.DownloadDir")) //Converting the string literal into a filepath
+	dataDirAbs, err := filepath.Abs(dataDir)                                 //Converting to an absolute file path
 	if err != nil {
 		fmt.Println("Failed creating absolute path for dataDir", err)
 	}
@@ -214,8 +201,7 @@ func FullClientSettingsNew() FullClientSettings {
 	disableUTP := viper.GetBool("torrentClientConfig.DisableUTP")
 	disableTCP := viper.GetBool("torrentClientConfig.DisableTCP")
 	disableIPv6 := viper.GetBool("torrentClientConfig.DisableIPv6")
-	debug := viper.GetBool("torrentClientConfig.Debug")
-	proxyURL := viper.GetString("torrentClientConfig.ProxyURL")
+	debug := viper.GetBool("serverConfig.Debug")
 
 	//dhtServerConfig := dht.StartingNodesGetter()
 
@@ -251,7 +237,7 @@ func FullClientSettingsNew() FullClientSettings {
 	tConfig.DisableTCP = disableTCP
 	tConfig.DisableIPv6 = disableIPv6
 	tConfig.Debug = debug
-	tConfig.ProxyURL = proxyURL
+	tConfig.ProxyURL = socksProxyURLBase
 	tConfig.EncryptionPolicy = encryptionPolicy
 	if listenAddr != "" {
 		tConfig.SetListenAddr(listenAddr) //Setting the IP address to listen on
@@ -261,6 +247,8 @@ func FullClientSettingsNew() FullClientSettings {
 		LoggingLevel:  logLevel,
 		LoggingOutput: logOutput,
 		SeedRatioStop: seedRatioStop,
+		DownloadDir:			dataDirAbs,
+		Debug:					debug,
 		ClientConnectSettings: ClientConnectSettings{
 			HTTPAddr:            httpAddr,
 			HTTPAddrIP:          httpAddrIP,
@@ -273,16 +261,11 @@ func FullClientSettingsNew() FullClientSettings {
 			SocksProxyURL:       socksProxyURLBase,
 			PushBulletToken:     pushBulletToken,
 		},
-		TFileUploadFolder:  "uploadedTorrents",
-		TorrentConfig:      &GoTorrent.ClientConfig{
+		TorrentConfig: &GoTorrent.ClientConfig{
 			Cc:           tConfig,
 			MaxActiveNum: maxActiveTorrents,
 		},
-		DefaultMoveFolder:  defaultMoveFolderAbs,
-		TorrentWatchFolder: torrentWatchFolderAbs,
-		MaxActiveTorrents:  maxActiveTorrents,
 	}
 
 	return Config
-
 }

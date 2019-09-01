@@ -4,13 +4,9 @@ import (
 	"fmt"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 )
-
-//Logger is the injected variable for global logger
-var Logger *logrus.Logger
 
 //Conn is the injected variable for the websocket connection
 var Conn *websocket.Conn

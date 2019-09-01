@@ -8,7 +8,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"path/filepath"
 	"reflect"
 
 	Settings "github.com/MidSmer/goTorrent/settings"
@@ -99,7 +98,7 @@ func main() {
 	torrent.Logger = Logger //Injecting the logger into all the packages
 	Storage.Logger = Logger
 	Settings.Logger = Logger
-	var torrentQueues = Storage.TorrentQueues{}
+
 	Config := Settings.FullClientSettingsNew() //grabbing from settings.go
 	if Config.LoggingOutput == "file" {
 		_, err := os.Stat("logs")
@@ -126,11 +125,10 @@ func main() {
 	Logger.SetLevel(Config.LoggingLevel)
 
 	httpAddr := Config.HTTPAddr
-	os.MkdirAll(Config.TFileUploadFolder, 0755)  //creating a directory to store uploaded torrent files
-	os.MkdirAll(Config.TorrentWatchFolder, 0755) //creating a directory to watch for added .torrent files
+	_ = os.MkdirAll(Config.DownloadDir, 0755)  //creating a directory to store torrent files
 	Logger.WithFields(logrus.Fields{"Config": Config}).Info("Torrent Client Config has been generated...")
 
-	db, err := Storage.NewStorage(Config.TorrentConfig.Cc.DataDir) //initializing the boltDB store that contains all the added torrents
+	db, err := Storage.NewStorage(Config.DownloadDir) //initializing the boltDB store that contains all the added torrents
 	if err != nil {
 		Logger.WithFields(logrus.Fields{"error": err}).Fatal("Error opening/creating storage.db")
 	} else {
@@ -142,13 +140,6 @@ func main() {
 	tclient, err := torrent.NewClient(Config.TorrentConfig) //pulling out the torrent specific config to use
 	if err != nil {
 		Logger.WithFields(logrus.Fields{"error": err}).Fatalf("Error creating torrent client: %s")
-	}
-
-	err = db.One("ID", 5, &torrentQueues)
-	if err != nil { //Create the torrent que database
-		Logger.WithFields(logrus.Fields{"error": err}).Info("No Queue database found, assuming first run, creating database")
-		torrentQueues.ID = 5
-		db.Save(&torrentQueues)
 	}
 
 	tokens := Storage.IssuedTokensList{} //if first run setting up the authentication tokens
@@ -303,20 +294,6 @@ func main() {
 				//sendJSON <- clientSettingsFile
 
 			case "magnetLinkSubmit": //if we detect a magnet link we will be adding a magnet torrent
-				storageValue, ok := payloadData["StorageValue"].(string)
-				if storageValue == "" || ok == false {
-					storageValue, err = filepath.Abs(filepath.ToSlash(Config.DefaultMoveFolder))
-					if err != nil {
-						Logger.WithFields(logrus.Fields{"err": err, "MagnetLink": Config.DefaultMoveFolder}).Error("Unable to add default Storage Path")
-					}
-				} else {
-					storageValue, err = filepath.Abs(filepath.ToSlash(storageValue))
-					if err != nil {
-						Logger.WithFields(logrus.Fields{"err": err, "MagnetLink": storageValue}).Error("Unable to add Storage Path")
-						torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "error", Payload: "Unable to add Storage path..."}, conn)
-						storageValue, _ = filepath.Abs(filepath.ToSlash(Config.DefaultMoveFolder))
-					}
-				}
 				labelValue, ok := payloadData["Label"].(string)
 				if labelValue == "" || ok == false {
 					labelValue = "None"

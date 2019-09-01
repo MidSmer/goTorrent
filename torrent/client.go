@@ -1,10 +1,10 @@
 package torrent
 
 import (
-	"fmt"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/asdine/storm"
+	"github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
@@ -115,7 +115,7 @@ func (cl *Client) AddTorrentSpec(spec *torrent.TorrentSpec) (t *Torrent, new boo
 	e := cl.storage.One("Hash", t.to.InfoHash().String(), &storage)
 	if e != nil {
 		if e != storm.ErrNotFound {
-			fmt.Println("Err read storage.db")
+			Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err read storage.db")
 		}
 	}
 
@@ -133,7 +133,7 @@ func (cl *Client) AddTorrentSpec(spec *torrent.TorrentSpec) (t *Torrent, new boo
 
 		e := cl.storage.Save(&storage)
 		if e != nil {
-			fmt.Println("Err write storage.db")
+			Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err write storage.db")
 		}
 	}
 
@@ -167,7 +167,7 @@ func (cl *Client) StartDownload(t *Torrent) {
 		storage := TorrentStorage{}
 		e := cl.storage.One("Hash", t.to.InfoHash().String(), &storage)
 		if e != nil {
-			fmt.Println("Err read storage.db")
+			Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err read storage.db")
 		}
 
 		storage.IsGetMatainfo = false
@@ -175,7 +175,7 @@ func (cl *Client) StartDownload(t *Torrent) {
 
 		e = cl.storage.Update(&storage)
 		if e != nil {
-			fmt.Println("Err write storage.db")
+			Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err write storage.db")
 		}
 	}()
 }
@@ -191,7 +191,7 @@ func (cl *Client) Recovery() {
 	var storage []TorrentStorage
 	e := cl.storage.All(&storage)
 	if e != nil {
-		fmt.Println("Err read storage.db")
+		Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err read storage.db")
 	}
 
 	for _, item := range storage {
@@ -205,7 +205,8 @@ func (cl *Client) Recovery() {
 			spec.InfoBytes = item.InfoBytes
 		}
 
-		_, _, _ = cl.AddTorrentSpec(spec)
+		T, _, _ := cl.AddTorrentSpec(spec)
+		cl.StartDownload(T)
 	}
 }
 

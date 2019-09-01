@@ -3,13 +3,11 @@
     ServerPort = "8000" #leave format as is it expects a string with colon
     ServerAddr = "127.0.0.1" #Put in the IP address you want to bind to
     LogLevel = "Debug" # Options = Debug, Info, Warn, Error, Fatal, Panic
-    LogOutput = "file" #Options = file, stdout #file will print it to logs/server.log
+    LogOutput = "stdout" #Options = file, stdout #file will print it to logs/server.log
 
     SeedRatioStop = 1.50 #automatically stops the torrent after it reaches this seeding ratio
 
-    #Relative or absolute path accepted, the server will convert any relative path to an absolute path.
-    DefaultMoveFolder = 'downloads' #default path that a finished torrent is symlinked to after completion. Torrents added via RSS will default here
-    TorrentWatchFolder = 'torrentUpload' #folder path that is watched for .torrent files and adds them automatically every 5 minutes
+    DownloadDir = 'downloading'    #the full OR relative path where the torrent server stores in-progress torrents
     
     #Limits your upload and download speed globally, all are averages and not burst protected (usually burst on start).
     #Low = ~.05MB/s, Medium = ~.5MB/s, High = ~1.5MB/s
@@ -17,6 +15,8 @@
     DownloadRateLimit = "Unlimited"
     #Maximum number of allowed active torrents, the rest will be queued
     MaxActiveTorrents = 5
+
+    Debug = true #boolean
 
 [goTorrentWebUI]
     #Basic goTorrentWebUI authentication (not terribly secure, implemented in JS, password is hashed to SHA256, not salted, basically don't depend on this if you require very good security)
@@ -49,8 +49,6 @@
     PreferNoEncryption = true
 
 [torrentClientConfig]
-    DownloadDir = 'downloading'    #the full OR relative path where the torrent server stores in-progress torrents
-
     Seed = true #boolean #seed after download
     
     # Never send chunks to peers.
@@ -85,8 +83,6 @@
 
     DisableIPv6 = false #boolean
 
-    Debug = false #boolean
-
     #HTTP *http.Client
 
     HTTPUserAgent = "" # HTTPUserAgent changes default UserAgent for HTTP requests
@@ -97,8 +93,6 @@
 
     # Overrides the default DHT configuration, see dhtServerConfig  #advanced.. so be careful
     DHTConfig = "" # default is "dht.ServerConfig"
-
-    ProxyURL = ""
 
 [dhtServerConfig]
     # Set NodeId Manually. Caller must ensure that if NodeId does not conform to DHT Security Extensions, that NoSecurity is also set.
