@@ -122,13 +122,13 @@ func (cl *Client) AddTorrentSpec(spec *torrent.TorrentSpec) (t *Torrent, new boo
 	if storage.Hash == "" {
 		storage = TorrentStorage{
 			Hash:          T.InfoHash().String(),
-			DateAdded:     time.Now().String(),
+			DateAdded:     time.Now().Format("2006-01-02 15:04:05"),
 			TorrentName:   spec.DisplayName,
 			Trackers:      spec.Trackers,
 			InfoHash:      T.InfoHash(),
-			IsActive:      true,
-			IsPaused:      false,
-			IsGetMatainfo: true,
+			IsActive:      t.isActive,
+			IsPaused:      t.isPaused,
+			IsGetMatainfo: t.isGetMatainfo,
 		}
 
 		e := cl.storage.Save(&storage)
@@ -136,6 +136,11 @@ func (cl *Client) AddTorrentSpec(spec *torrent.TorrentSpec) (t *Torrent, new boo
 			Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err write storage.db")
 		}
 	}
+
+	t.dateAdded = storage.DateAdded
+	t.isActive = storage.IsActive
+	t.isPaused = storage.IsPaused
+	t.isGetMatainfo = storage.IsGetMatainfo
 
 	cl.torrents[T.InfoHash()] = t
 	return
@@ -206,7 +211,9 @@ func (cl *Client) Recovery() {
 		}
 
 		T, _, _ := cl.AddTorrentSpec(spec)
-		cl.StartDownload(T)
+		if T.isActive && !T.isPaused {
+			cl.StartDownload(T)
+		}
 	}
 }
 

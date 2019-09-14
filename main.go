@@ -314,15 +314,15 @@ func main() {
 				}
 
 			case "stopTorrents":
-				//torrentHashes := payloadData["TorrentHashes"].([]interface{})
-				//torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "info", Payload: "Received Stop Request"}, conn)
-				//for _, singleTorrent := range tclient.Torrents() {
-				//	for _, singleSelection := range torrentHashes {
-				//
-				//			torrent.StopTorrent(singleTorrent, )
-				//
-				//	}
-				//}
+				torrentHashes := payloadData["TorrentHashes"].([]interface{})
+				torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "info", Payload: "Received Stop Request"}, conn)
+				for _, singleTorrent := range tclient.Torrents() {
+					for _, singleSelection := range torrentHashes {
+						if singleTorrent.InfoHash().String() == singleSelection {
+							singleTorrent.StopTorrent()
+						}
+					}
+				}
 
 			case "deleteTorrents":
 				//torrentHashes := payloadData["TorrentHashes"].([]interface{})

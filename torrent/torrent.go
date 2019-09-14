@@ -10,10 +10,21 @@ type Torrent struct {
 
 	hash				metainfo.Hash
 
+	dateAdded       	string
+
 	isErrored  			bool
 	isPaused	 		bool
 	isActive	 		bool
 	isGetMatainfo	    bool
+}
+
+func (t *Torrent) InfoHash() metainfo.Hash {
+	return t.hash
+}
+
+func (t *Torrent) StopTorrent() {
+	t.isPaused = true
+	t.to.SetMaxEstablishedConns(0)
 }
 
 func (t *Torrent) CalculateTorrentStatus() string {
