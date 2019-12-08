@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -8,7 +9,9 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 
 	Settings "github.com/MidSmer/goTorrent/settings"
 	Storage "github.com/MidSmer/goTorrent/storage"
@@ -125,7 +128,7 @@ func main() {
 	Logger.SetLevel(Config.LoggingLevel)
 
 	httpAddr := Config.HTTPAddr
-	_ = os.MkdirAll(Config.DownloadDir, 0755)  //creating a directory to store torrent files
+	_ = os.MkdirAll(Config.DownloadDir, 0755) //creating a directory to store torrent files
 	Logger.WithFields(logrus.Fields{"Config": Config}).Info("Torrent Client Config has been generated...")
 
 	db, err := Storage.NewStorage(Config.DownloadDir) //initializing the boltDB store that contains all the added torrents
@@ -313,6 +316,31 @@ func main() {
 					torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "info", Payload: "Received MagnetLink"}, conn)
 				}
 
+			case "torrentFileSubmit":
+				base64encoded := payloadData["FileData"].(string)
+				fileName := payloadData["FileName"].(string)
+
+				base64file := strings.Split(base64encoded, ",")             //Mozilla and Chrome have different payloads, but both start the file after the comma
+				file, err := base64.StdEncoding.DecodeString(base64file[1]) //grabbing the second half of the string after the split
+				if err != nil {
+					Logger.WithFields(logrus.Fields{"Error": err, "file": file}).Info("Unable to decode base64 string to file")
+					torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "error", Payload: "Unable to decode base64 string to file"}, conn)
+				}
+				filePath := filepath.Join(Config.DownloadDir, fileName)
+				filePathAbs, err := filepath.Abs(filePath) //creating a full filepath to store the .torrent files
+
+				err = ioutil.WriteFile(filePathAbs, file, 0755) //Dumping our received file into the filename
+				if err != nil {
+					Logger.WithFields(logrus.Fields{"filepath": filePathAbs, "file Name": fileName, "Error": err}).Error("Unable to write torrent data to file")
+					torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "error", Payload: "Unable to write torrent data to file"}, conn)
+				}
+
+				_, err = tclient.AddTorrentFile(filePathAbs)
+				if err != nil {
+					Logger.WithFields(logrus.Fields{"filepath": filePathAbs, "Error": err}).Error("Unable to add Torrent to torrent server")
+					torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "error", Payload: "Unable to add Torrent to torrent server"}, conn)
+				}
+
 			case "stopTorrents":
 				torrentHashes := payloadData["TorrentHashes"].([]interface{})
 				torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "info", Payload: "Received Stop Request"}, conn)
@@ -325,27 +353,18 @@ func main() {
 				}
 
 			case "deleteTorrents":
-				//torrentHashes := payloadData["TorrentHashes"].([]interface{})
-				//withData := payloadData["WithData"].(bool) //Checking if torrents should be deleted with data
-				//torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "info", Payload: "Received Delete Request"}, conn)
-				//Logger.WithFields(logrus.Fields{"deleteTorrentsPayload": msg.Payload, "torrentlist": msg.Payload, "deleteWithData?": withData}).Info("message for deleting torrents")
-				//for _, singleTorrent := range runningTorrents {
-				//	for _, singleSelection := range torrentHashes {
-				//		if singleTorrent.InfoHash().String() == singleSelection {
-				//			oldTorrentInfo := Storage.FetchTorrentFromStorage(db, singleTorrent.InfoHash().String())
-				//			torrentQueues = Storage.FetchQueues(db)
-				//
-				//			Logger.WithFields(logrus.Fields{"selection": singleSelection}).Info("Matched for deleting torrents")
-				//			if withData {
-				//				oldTorrentInfo.TorrentStatus = "DroppedData" //Will be cleaned up the next engine loop since deleting a torrent mid loop can cause issues
-				//			} else {
-				//				oldTorrentInfo.TorrentStatus = "Dropped"
-				//			}
-				//			Storage.UpdateStorageTick(db, oldTorrentInfo)
-				//			Storage.UpdateQueues(db, torrentQueues)
-				//		}
-				//	}
-				//}
+				torrentHashes := payloadData["TorrentHashes"].([]interface{})
+				withData := payloadData["WithData"].(bool) //Checking if torrents should be deleted with data
+				torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "info", Payload: "Received Delete Request"}, conn)
+				Logger.WithFields(logrus.Fields{"deleteTorrentsPayload": msg.Payload, "torrentlist": msg.Payload, "deleteWithData?": withData}).Info("message for deleting torrents")
+
+				for _, singleTorrent := range tclient.Torrents() {
+					for _, singleSelection := range torrentHashes {
+						if singleTorrent.InfoHash().String() == singleSelection {
+							singleTorrent.DeleteTorrent()
+						}
+					}
+				}
 
 			case "startTorrents":
 				//torrentHashes := payloadData["TorrentHashes"].([]interface{})

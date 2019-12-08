@@ -29,7 +29,7 @@ func (a ClientDBArray) Swap(i, j int){
 func (a ClientDBArray) Less(i, j int) bool {
 	t1, err := time.ParseInLocation("2006-01-02 15:04:05", a[i].DateAdded, time.Local)
 	t2, err := time.ParseInLocation("2006-01-02 15:04:05", a[j].DateAdded, time.Local)
-	if err == nil && t1.Before(t2) {
+	if err == nil && t1.After(t2) {
 		return false
 	}
 	return true

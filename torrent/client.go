@@ -104,6 +104,7 @@ func (cl *Client) AddTorrentSpec(spec *torrent.TorrentSpec) (t *Torrent, new boo
 
 	t = &Torrent{
 		to:   T,
+		cl:	  cl,
 		hash: T.InfoHash(),
 
 		isActive:      true,
@@ -152,6 +153,17 @@ func (cl *Client) AddMagnet(uri string) (T *Torrent, err error) {
 		return
 	}
 
+	T, _, err = cl.AddTorrentSpec(spec)
+	return
+}
+
+func (cl *Client) AddTorrentFile(arg string) (T *Torrent, err error)  {
+	metaInfo, err := metainfo.LoadFromFile(arg)
+	if err != nil {
+		return
+	}
+
+	spec := torrent.TorrentSpecFromMetaInfo(metaInfo)
 	T, _, err = cl.AddTorrentSpec(spec)
 	return
 }
