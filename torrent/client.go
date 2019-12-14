@@ -1,6 +1,7 @@
 package torrent
 
 import (
+	"fmt"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/asdine/storm"
@@ -104,7 +105,7 @@ func (cl *Client) AddTorrentSpec(spec *torrent.TorrentSpec) (t *Torrent, new boo
 
 	t = &Torrent{
 		to:   T,
-		cl:	  cl,
+		cl:   cl,
 		hash: T.InfoHash(),
 
 		isActive:      true,
@@ -157,7 +158,7 @@ func (cl *Client) AddMagnet(uri string) (T *Torrent, err error) {
 	return
 }
 
-func (cl *Client) AddTorrentFile(arg string) (T *Torrent, err error)  {
+func (cl *Client) AddTorrentFile(arg string) (T *Torrent, err error) {
 	metaInfo, err := metainfo.LoadFromFile(arg)
 	if err != nil {
 		return
@@ -227,6 +228,29 @@ func (cl *Client) Recovery() {
 			cl.StartDownload(T)
 		}
 	}
+}
+
+func (cl *Client) dropTorrent(infoHash metainfo.Hash) (err error) {
+	t, ok := cl.torrents[infoHash]
+	if !ok {
+		err = fmt.Errorf("no such torrent")
+		Logger.WithFields(logrus.Fields{"error": err}).Fatal("no such torrent")
+		return
+	}
+
+	storage := TorrentStorage{}
+	err = cl.storage.One("Hash", t.to.InfoHash().String(), &storage)
+	if err != nil {
+		Logger.WithFields(logrus.Fields{"error": err}).Fatal("Err read storage.db")
+	}
+
+	err = cl.storage.DeleteStruct(&storage)
+	if err != nil {
+		Logger.WithFields(logrus.Fields{"error": err}).Fatal("Err delete storage.db")
+	}
+
+	delete(cl.torrents, infoHash)
+	return
 }
 
 func (cl *Client) rLock() {

@@ -191,8 +191,6 @@ func main() {
 	var RunningTorrentArray = []torrent.ClientDB{} //this stores ALL of the torrents that are running, used for client update pushes combines Local Storage and Running tclient info
 	var PreviousTorrentArray = []torrent.ClientDB{}
 
-	TorrentLocalArray := Storage.FetchAllStoredTorrents(db) //pulling in all the already added torrents - this is an array of ALL of the local storage torrents, they will be added back in via hash
-
 	router := mux.NewRouter()         //setting up the handler for the web backend
 	router.HandleFunc("/", serveHome) //Serving the main page for our SPA
 	router.PathPrefix("/static/").Handler(http.FileServer(http.Dir("public")))
@@ -271,7 +269,6 @@ func main() {
 			case "torrentListRequest": //This will run automatically if a webUI is open
 				Logger.WithFields(logrus.Fields{"message": msg}).Debug("Client Requested TorrentList Update")
 				go func() { //running updates in separate thread so can still accept commands
-					TorrentLocalArray = Storage.FetchAllStoredTorrents(db)           //Required to re-read the database since we write to the DB and this will pull the changes from it
 					RunningTorrentArray = torrent.CreateRunningTorrentArray(tclient) //Updates the RunningTorrentArray with the current client data as well
 					PreviousTorrentArray = RunningTorrentArray
 					torrentlistArray := torrent.TorrentList{MessageType: "torrentList", ClientDBstruct: RunningTorrentArray, Totaltorrents: len(RunningTorrentArray)}

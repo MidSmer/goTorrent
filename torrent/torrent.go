@@ -38,7 +38,7 @@ func (t *Torrent) StopTorrent() {
 func (t *Torrent) DeleteTorrent() {
 	t.isActive = false
 	t.to.Drop()
-	t.delete()
+	_ = t.cl.dropTorrent(t.hash)
 }
 
 func (t *Torrent) save() {
@@ -55,19 +55,6 @@ func (t *Torrent) save() {
 	e = t.cl.storage.Update(&storage)
 	if e != nil {
 		Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err write storage.db")
-	}
-}
-
-func (t *Torrent)delete()  {
-	storage := TorrentStorage{}
-	e := t.cl.storage.One("Hash", t.to.InfoHash().String(), &storage)
-	if e != nil {
-		Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err read storage.db")
-	}
-
-	e = t.cl.storage.DeleteStruct(&storage)
-	if e != nil {
-		Logger.WithFields(logrus.Fields{"error": e}).Fatal("Err delete storage.db")
 	}
 }
 
