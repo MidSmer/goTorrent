@@ -364,35 +364,18 @@ func main() {
 				}
 
 			case "startTorrents":
-				//torrentHashes := payloadData["TorrentHashes"].([]interface{})
-				//Logger.WithFields(logrus.Fields{"selection": msg.Payload}).Info("Matched for starting torrents")
-				//torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "info", Payload: "Received Start Request"}, conn)
-				//for _, singleTorrent := range runningTorrents {
-				//	for _, singleSelection := range torrentHashes {
-				//		if singleTorrent.InfoHash().String() == singleSelection {
-				//			Logger.WithFields(logrus.Fields{"infoHash": singleTorrent.InfoHash().String()}).Info("Found matching torrent to start")
-				//			oldTorrentInfo := Storage.FetchTorrentFromStorage(db, singleTorrent.InfoHash().String())
-				//			Logger.WithFields(logrus.Fields{"Torrent": oldTorrentInfo.TorrentName}).Info("Changing database to torrent running with 80 max connections")
-				//			oldTorrentInfo.TorrentStatus = "ForceStart"
-				//			oldTorrentInfo.MaxConnections = 80
-				//			Storage.UpdateStorageTick(db, oldTorrentInfo) //Updating the torrent status
-				//			torrent.AddTorrentToForceStart(&oldTorrentInfo, singleTorrent, db)
-				//
-				//		}
-				//		torrentQueues = Storage.FetchQueues(db)
-				//		if len(torrentQueues.ActiveTorrents) > Config.MaxActiveTorrents { //Since we are starting a new torrent stop the last torrent in the que if running is full
-				//			//removeTorrent := torrentQueues.ActiveTorrents[len(torrentQueues.ActiveTorrents)-1]
-				//			removeTorrent := torrentQueues.ActiveTorrents[len(torrentQueues.ActiveTorrents)-1]
-				//			for _, singleTorrent := range runningTorrents {
-				//				if singleTorrent.InfoHash().String() == removeTorrent {
-				//					oldTorrentInfo := Storage.FetchTorrentFromStorage(db, singleTorrent.InfoHash().String())
-				//					torrent.RemoveTorrentFromActive(&oldTorrentInfo, singleTorrent, db)
-				//					Storage.UpdateStorageTick(db, oldTorrentInfo)
-				//				}
-				//			}
-				//		}
-				//	}
-				//}
+				torrentHashes := payloadData["TorrentHashes"].([]interface{})
+				Logger.WithFields(logrus.Fields{"selection": msg.Payload}).Info("Matched for starting torrents")
+				torrent.CreateServerPushMessage(torrent.ServerPushMessage{MessageType: "serverPushMessage", MessageLevel: "info", Payload: "Received Start Request"}, conn)
+				for _, singleTorrent := range tclient.Torrents() {
+					for _, singleSelection := range torrentHashes {
+						if singleTorrent.InfoHash().String() == singleSelection {
+							Logger.WithFields(logrus.Fields{"infoHash": singleTorrent.InfoHash().String()}).Info("Found matching torrent to start")
+
+							singleTorrent.StartTorrent()
+						}
+					}
+				}
 
 			case "forceUploadTorrents": //TODO allow force to override total limit of queued torrents?
 				//torrentHashes := payloadData["TorrentHashes"].([]interface{})

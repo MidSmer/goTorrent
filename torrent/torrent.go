@@ -29,7 +29,16 @@ func (t *Torrent) Magnet() string {
 	return mi.Magnet(t.to.Name(), t.to.InfoHash()).String()
 }
 
+func (t *Torrent) StartTorrent() {
+	t.isActive = true
+	t.isPaused = false
+	t.save()
+
+	t.cl.StartDownload(t)
+}
+
 func (t *Torrent) StopTorrent() {
+	t.isActive = false
 	t.isPaused = true
 	t.to.SetMaxEstablishedConns(0)
 	t.save()
